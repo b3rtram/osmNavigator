@@ -10,21 +10,26 @@ import (
 	"strconv"
 	"time"
 
+	navi "github.com/camen6ert/osmNavigator/navigator"
+
 	"github.com/camen6ert/goXmlParser"
 )
 
+//Node is bla
 //<node id="6145747792" lat="49.5245371" lon="10.9062853" version="1" timestamp="2018-12-18T17:33:24Z" changeset="0"/>
 type Node struct {
 	lat float64
 	lon float64
 }
 
+//Way is bla
 type Way struct {
 	id    int64
 	nodes []int64
 	tags  map[string]string
 }
 
+//Tag is bla
 type Tag struct {
 	k string
 	v string
@@ -70,7 +75,7 @@ func main() {
 
 	nodes := make(map[int64]Node)
 	//ways := make(map[int64]Way)
-	edges := make(map[int64][]*Way)
+	edges := make(map[int64][]Way)
 	way := Way{}
 	way.tags = make(map[string]string)
 
@@ -82,10 +87,9 @@ func main() {
 				parentIsNode = false
 				id, _ := strconv.ParseInt(t.Attributes["id"], 10, 64)
 				way = Way{id: id}
-				//ways[id] = way
 
 				if id%100 == 0 {
-					fmt.Println(t.Attributes["id"])
+					fmt.Println(id)
 				}
 			} else if t.Name == "tag" {
 				if parentIsNode {
@@ -99,8 +103,8 @@ func main() {
 			} else if t.Name == "nd" {
 				id, _ := strconv.ParseInt(t.Attributes["ref"], 10, 64)
 				way.nodes = append(way.nodes, id)
-				edges[id] = append(edges[id], &way)
-			} else if t.Name == "nde" {
+				edges[id] = append(edges[id], way)
+			} else if t.Name == "node" {
 				parentIsNode = true
 				id, _ := strconv.ParseInt(t.Attributes["id"], 10, 64)
 				lat, _ := strconv.ParseFloat(t.Attributes["lat"], 32)
@@ -118,28 +122,58 @@ func main() {
 
 		})
 
-	processWays(&edges)
+	processWays(&edges, &nodes)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Binomial took %s", elapsed)
 
 }
 
-func processWays(e *map[int64][]*Way) {
+func processWays(e *map[int64][]Way, nodesPtr *map[int64]Node) {
 
 	fmt.Println("Process ways")
 
-	// for _, ways := range *e {
+	n := navi.NewNavigator()
+	nodes := *nodesPtr
 
-	// 	//if ways have the same reference to a node they are connected
-	// 	if len(ways) >= 2 {
+	for buf, edge := range *e {
 
-	// 		g := graphnode{}
+		fmt.Println(buf)
 
-	// 		for way := range ways {
+		for _, w := range edge {
 
-	// 		}
-	// 	}
-	// }
+			street := navi.Street{}
+			street.ID = w.id
+			if s, ok := w.tags["addr:street"]; ok {
+				street.Name = s
+			}
+			if co, ok := w.tags["addr:city"]; ok {
+				street.City = co
+			}
+			if c, ok := w.tags["addr:country"]; ok {
+				street.Country = c
+			}
 
+			for _, p := range w.nodes {
+				pos := navi.Pos{}
+				pos.Lat = nodes[p].lat
+				pos.Lon = nodes[p].lon
+				street.Pos = append(street.Pos, &pos)
+			}
+
+			for _, c := range edge {
+				if c.id != w.id {
+					street.Con = append(street.Con, c.id)
+				}
+			}
+
+			n.AddStreet(street)
+
+			// if p, ok := w.tags["addr:postcode"]; ok {
+			// }
+			// if h, ok := way.tags["addr:housenumber"]; ok {
+			// }
+
+		}
+	}
 }
